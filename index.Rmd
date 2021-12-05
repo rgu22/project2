@@ -50,14 +50,17 @@ class_diag <- function(score, truth, positive, cutoff=.5){
 
 ### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc. See instructions for more information
+This dataset is the State-Level Education and Voter Turnout in 2016. It has a total of 14 variables: 8 numeric variables, two binary, two categorical variables, a state identifier variable, and the year variable which is the same for all observations.  It contains the year of election (year), the state abbreviation variables (state), the state's Census region (region), the state's Census division (division), voter turnout for the highest office as percent of voting-eligible population (turnoutho), the percentage of the state that completed high school (pershed), the percentage of the state that completed college (percoled), an estimate of the state's GDP per capita (gdppercap), if it is a swing state (ss), if Trump won the state (trumpw), the share of the vote Trump received (trumpshare), the state-level unemployment rate entering Nov. 2016 (sunempr), the state-level unemployment rate (12-month difference) entering Nov. 2016 (sunempr12md), and an estimate of the state's GDP (gdp). 
 
+I found the data from stevedata, and it is a data frame with 51 observations of the 13 variables (excluding year). For the region variables, there are 12 states in North Central, 9 states in the Northeast, 17 states in the South, and 13 states in the West. For the divisions, 5 are in East North Central, 4 are in East South Central, 3 in Middle Atlantic, 8 in Mountain, 6 in New England, 5 in Pacific, 9 in South Atlantic, 7 in West North Central, and 4 in West South Central. For the binary vairbale trumpw, 30 states are 1, 21 states are 0. For the swing state variable, 39 states are not, and 12 states are.  
 ```{R}
 library(tidyverse)
-
 library(stevedata)
 election_turnout
-
+election_turnout %>% group_by(division) %>% count
+election_turnout %>% group_by(region) %>% count
+election_turnout %>% group_by(trumpw) %>% count
+election_turnout %>% group_by(ss) %>% count
 ```
 
 ### Cluster Analysis
@@ -90,8 +93,6 @@ election_turnout %>%slice(pam1$id.med)
 
 ```
 
-Include a paragraph or two describing results found, interpreting the clusters in terms of the original variables and observations, discussing goodness of fit of the cluster solution, etc.
-
 I first chose the three variables turnoutho,trumpshare, and percoled and then conducted a PAM analysis of k=2 because it had the highest average silhouette width of .377. The two clusters were similar in both state level unemployment rate measurements, but differed the most in percentage of the state that completed high school (pershed) and voter turnout for the highest office as percent of voting-eligible population (turnoutoh). These two clusters' mediods are South Carolina and Washington, and the most prominent distinction is if Trump won the state or not in the 2016 election. The cluster with South Carolina had lower percentage of completed high school and completed college (pershed/percoled), lower GDP per cap (gdppercap), lower turnout rates (turnoutoh), and higher share of the vote Trump received (trumpshare). The interpretation of the average silhouette width is that the structure is weak and could be artificial. 
     
     
@@ -114,9 +115,7 @@ library(factoextra)
 fviz_pca_biplot(pcac)
 ```
 
-Include a paragraph or two describing results with a focus on what it means to score high/low on each PC you retain (interpreting each PC you retained in terms of the original variables/loadings); also discuss how much of the total variance in your dataset is explained by these PCs.
-
-To score high on PC1 means that the state has a low trumpshare, and a low state state-level unemployment rate entering Nov. 2016 (sunempr). The state has high voter turnout, percent of state that completed both high school and college, and also has a high GDP per capita. If the state has a low PC1 score, it is the opposite. This PC focuses on high educational attainments vs trumpshare. For PC2, a high score means a high percentage of high school completion, a high share of Trump supporters, and a large voter turnout. The high PC2 scores will have minimal unemployment rates, GDP related variables, and percent of college graduates. This PC seems to focus on unemployment rates vs percent high school completion. Finally, for PC3, there are only four variables. To score high on PC3 means having a high state GDP and voter turnout, but low or minimal GDP per capita and unemployment rates. Scoring low is the opposite- high GDP per capita and high unemployment rates, but low GDP and voter turnout. This PC focuses on GDP vs GDP per capita. 
+To score high on PC1 means that the state has a low trumpshare, and a low state state-level unemployment rate entering Nov. 2016 (sunempr). The state has high voter turnout, percent of state that completed both high school and college, and also has a high GDP per capita. If the state has a low PC1 score, it is the opposite. This PC focuses on high educational attainments vs trumpshare. For PC2, a high score means a high percentage of high school completion, a high share of Trump supporters, and a large voter turnout. The high PC2 scores will have minimal unemployment rates, GDP related variables, and percent of college graduates. This PC seems to focus on unemployment rates vs percent high school completion. If the state has a low PC2 score, it is the opposite. Finally, for PC3, there are only four variables. To score high on PC3 means having a high state GDP and voter turnout, but low or minimal GDP per capita and unemployment rates. Scoring low is the opposite- high GDP per capita and high unemployment rates, but low GDP and voter turnout. This PC focuses on GDP vs GDP per capita. 
 With the 3 principal components, 80.71% of the total variance in the dataset is explained. 
 
 ###  Linear Classifier
@@ -127,13 +126,14 @@ logistic_fit <- glm(trumpw=="True" ~ . , data=numerics, family="binomial")
 prob_reg <- predict(logistic_fit,type="response")
 class_diag(prob_reg, truth=election_turnout$trumpw, positive=1)
 
-lin <-lm(trumpw=="True" ~ . , data=numerics)
-score <- predict(lin)
-class_diag(score,election_turnout$trumpw,positive=1)
 
+table(truth = factor(election_turnout$trumpw == 1, levels = c("TRUE", 
+    "FALSE")), prediction = factor(prob_reg > 0.5, levels = c("TRUE", 
+    "FALSE"))) %>% addmargins
 ```
 
 ```{R}
+set.seed(10)
 k=10
 
 data<-sample_frac(numerics) #randomly order rows
@@ -149,22 +149,21 @@ test<-data[folds==i,]
 truth<-test$trumpw
 
 # train model
-fit <- glm(trumpw=="True" ~ . , data=train, family="binomial") ### SPECIFY THE LOGISTIC REGRESSION MODEL FIT TO THE TRAINING SET HERE
+fit <- glm(trumpw=="True" ~ . , data=train, family="binomial") 
 
 # test model
-probs<- predict(fit,newdata = test,type="response") ### GET PREDICTIONS FROM THE TRAINED MODEL ON THE TEST SET HERE
+probs<- predict(fit,newdata = test,type="response") 
 
 # get performance metrics for each fold
 diags<-rbind(diags,class_diag(probs,truth, positive=1)) }
-glimpse(election_turnout)
 #average performance metrics across all folds
 summarize_all(diags,mean)
 ```
 
 
 
-The logistic regression model has a low scoring AUC of .479, which is worse than a 50-50 chance of guessing. The accuracy is also very low.
-However, k-fold CV predicts almost 50% more effectively than the logistic regression. I do not see the typical signs of overfitting, in fact, it is just the opposite. The logistic regression model seems to be over fitting more than any of the CV tests. 
+The logistic regression model has a low scoring AUC of .479, which is worse than a 50-50 chance of guessing. The accuracy is also very low. The confusion matrix shows that the model predicts false for all states. 
+However, k-fold CV predicts more effectively than the logistic regression. After setting the seed so that the output is constant, the AUC is .547. I do not see the typical signs of overfitting, in fact, it is just the opposite since the CV tests perform better. 
 
 ### Non-Parametric Classifier
 
@@ -180,6 +179,7 @@ table(truth= factor(election_turnout$trumpw==1, levels=c("TRUE","FALSE")),
 ```
 
 ```{R}
+set.seed(10)
 k=10 #choose number of folds
 data<-sample_frac(numerics) #randomly order rows
 folds <- rep(1:k, length.out=nrow(data)) #create folds
@@ -199,7 +199,7 @@ for(i in 1:k){
 summarize_all(diags,mean)
 ```
 
-The kNN model does much better than logistic regression, but still gets a 'C' score. After CV though, the AUC drops to .54 and makes it a "bad" model. I see signs of overfitting because of the drastic change in AUC. This nonparametric model does worse with the cross-validation performance when compared to the logistic regression. 
+The kNN model does much better than logistic regression, but still gets a 'C' score. After CV though, the AUC drops to .46 and makes it a "bad" model. I see signs of overfitting because of the drastic change in AUC. This nonparametric model does worse with the cross-validation performance when compared to the logistic regression. 
 
 
 ### Regression/Numeric Prediction
@@ -211,6 +211,7 @@ mean((election_turnout$trumpshare-yhat)^2)
 ```
 
 ```{R}
+set.seed(10)
 k=5 #choose number of folds
 data<-election_turnout[sample(nrow(election_turnout)),] #randomly order rows
 folds<-cut(seq(1:nrow(election_turnout)),breaks=k,labels=F) #create folds
@@ -228,7 +229,7 @@ for(i in 1:k){
 mean(diags)
 ```
 
-There are no signs of overfitting, in fact the model does better when it is cross-validated. However, overall both models perform exceptionally well with an almost near 0 MSE. The CV is only .003 better than the linear regression model fitted to the entire dataset. 
+There are no signs of overfitting, in fact the model does better when it is cross-validated. However, overall both models perform exceptionally well with an almost near 0 MSE. The CV is only .002 better than the linear regression model fitted to the entire dataset. 
 
 ### Python 
 
@@ -251,7 +252,7 @@ I first declared some words in the R and python chunk, then I printed in the pyt
 
 ### Concluding Remarks
 
-Include concluding remarks here, if any
+This dataset seems to have its quirks with the CV performing better than when the model is trained to the entire dataset. There are no strong assumptions that can be made from this model due to its low AUC and small average silhouette width. 
 
 
 
