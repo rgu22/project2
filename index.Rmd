@@ -46,7 +46,7 @@ class_diag <- function(score, truth, positive, cutoff=.5){
 
 # Mining, Classification, Prediction
 
-## Name and EID here
+## Rebecca Gu rjg2836
 
 ### Introduction 
 
@@ -54,6 +54,11 @@ Paragraph or two introducing your datasets and variables, why they are interesti
 
 ```{R}
 library(tidyverse)
+
+install.packages("stevedata")
+library(stevedata)
+??election_turnout
+
 # read your datasets in here, e.g., with read_csv()
 
 # if your dataset needs tidying, do so here
@@ -65,69 +70,194 @@ library(tidyverse)
 
 ```{R}
 library(cluster)
-# clustering code here
+pam_dat <- election_turnout %>% dplyr::select(turnoutho,trumpshare,percoled) %>% scale
+sil_width<-vector() #empty vector to hold mean sil width
+ for(i in 2:10){  
+   pam_fit <- pam(pam_dat, k = i)  
+   sil_width[i] <- pam_fit$silinfo$avg.width  
+ }
+ ggplot()+geom_line(aes(x=1:10,y=sil_width))+scale_x_continuous(name="k",breaks=1:10)
+#k=2 has the highest sil width
+ pam1 <- pam_dat %>% pam(k=2)
+
+library(plotly)
+final <- election_turnout %>% select(-ss,-trumpw,-year,-state,-division) %>% mutate(cluster = as.factor(pam1$clustering))
+final%>%plot_ly(x= ~sunempr,  y = ~gdppercap, z = ~percoled, color= ~cluster,
+        type = "scatter3d", mode = "markers",  symbol =  ~region,symbols =  c('circle', 'x', 'o'))
+
+library(GGally)
+ggpairs(final,columns=2:9, aes(color=cluster))
+
+pam1$silinfo$avg.width
+plot(pam1,which=2)
+election_turnout %>%slice(pam1$id.med)
+
+upper  = list(continuous = "blank")
+
 ```
 
-Discussion of clustering here
+Include a paragraph or two describing results found, interpreting the clusters in terms of the original variables and observations, discussing goodness of fit of the cluster solution, etc.
+
+I first chose the three variables turnoutho,trumpshare, and percoled and then conducted a PAM analysis of k=2 because it had the highest average silhouette width of .377. The two clusters were similar in both state level unemployment rate measurements, but differed the most in percentage of the state that completed high school (pershed) and voter turnout for the highest office as percent of voting-eligible population (turnoutoh). These two clusters' mediods are South Carolina and Washington, and the most prominent distinction is if Trump won the state or not in the 2016 election. The cluster with South Carolina had lower percentage of completed high school and completed college (pershed/percoled), lower GDP per cap (gdppercap), lower turnout rates (turnoutoh), and higher share of the vote Trump received (trumpshare). The interpretation of the average silhouette width is that the structure is weak and could be artificial. 
     
     
 ### Dimensionality Reduction with PCA
 
 ```{R}
-# PCA code here
+election_turnout %>% dplyr::select(-ss,-trumpw,-year,-state,-division,-region,-sunempr12md) %>% scale ->pca_dat
+pcac <- princomp(pca_dat,cor=T)
+summary(pcac,loading=T)
+
+eigval<-pcac$sdev^2 #square to convert SDs to eigenvalues
+varprop=round(eigval/sum(eigval), 2) #proportion of var explained by each PC
+
+ggplot() + geom_bar(aes(y=varprop, x=1:7), stat="identity") + xlab("") + geom_path(aes(y=varprop, x=1:7)) + 
+  geom_text(aes(x=1:7, y=varprop, label=round(varprop, 2)), vjust=1, col="white", size=5) + 
+  scale_y_continuous(breaks=seq(0, .6, .2), labels = scales::percent) + 
+  scale_x_continuous(breaks=1:10)
+#pick pca3
+eigval
+
+library(factoextra)
+fviz_pca_biplot(pcac)
 ```
 
-Discussions of PCA here. 
+Include a paragraph or two describing results with a focus on what it means to score high/low on each PC you retain (interpreting each PC you retained in terms of the original variables/loadings); also discuss how much of the total variance in your dataset is explained by these PCs.
+
+To score high on PC1 means that the state has a low trumpshare, and a low state state-level unemployment rate entering Nov. 2016 (sunempr). The state has high voter turnout, percent of state that completed both high school and college, and also has a high GDP per capita. If the state has a low PC1 score, it is the opposite. This PC focuses on high educational attainments vs trumpshare. For PC2, a high score means a high percentage of high school completion, a high share of Trump supporters, and a large voter turnout. The high PC2 scores will have minimal unemployment rates, GDP related variables, and percent of college graduates. This PC seems to focus on unemployment rates vs percent high school completion. Finally, for PC3, there are only four variables. To score high on PC3 means having a high state GDP and voter turnout, but low or minimal GDP per capita and unemployment rates. Scoring low is the opposite- high GDP per capita and high unemployment rates, but low GDP and voter turnout. This PC focuses on GDP vs GDP per capita. 
+With the 3 principal components, 80.71% of the total variance in the dataset is explained. 
 
 ###  Linear Classifier
 
 ```{R}
-# linear classifier code here
+election_turnout %>% dplyr::select(-ss,-year,-state,-division,-region,) -> numerics
+logistic_fit <- glm(trumpw=="True" ~ . , data=numerics, family="binomial")
+prob_reg <- predict(logistic_fit,type="response")
+class_diag(prob_reg, truth=election_turnout$trumpw, positive=1)
+
+lin <-lm(trumpw=="True" ~ . , data=numerics)
+score <- predict(lin)
+class_diag(score,election_turnout$trumpw,positive=1)
+
 ```
 
 ```{R}
-# cross-validation of linear classifier here
+k=10
+
+data<-sample_frac(numerics) #randomly order rows
+folds <- rep(1:k, length.out=nrow(data)) #create folds
+
+diags<-NULL
+
+i=1
+for(i in 1:k){
+# create training and test sets
+train<-data[folds!=i,] 
+test<-data[folds==i,] 
+truth<-test$trumpw
+
+# train model
+fit <- glm(trumpw=="True" ~ . , data=train, family="binomial") ### SPECIFY THE LOGISTIC REGRESSION MODEL FIT TO THE TRAINING SET HERE
+
+# test model
+probs<- predict(fit,newdata = test,type="response") ### GET PREDICTIONS FROM THE TRAINED MODEL ON THE TEST SET HERE
+
+# get performance metrics for each fold
+diags<-rbind(diags,class_diag(probs,truth, positive=1)) }
+glimpse(election_turnout)
+#average performance metrics across all folds
+summarize_all(diags,mean)
 ```
 
-Discussion here
+
+
+```
+```
+The logistic regression model has a low scoring AUC of .479, which is worse than a 50-50 chance of guessing. The accuracy is also very low.
+However, k-fold CV predicts almost 50% more effectively than the logistic regression. I do not see the typical signs of overfitting, in fact, it is just the opposite. The logistic regression model seems to be over fitting more than any of the CV tests. 
 
 ### Non-Parametric Classifier
 
 ```{R}
 library(caret)
+knn_fit <- knn3(factor(trumpw==1,levels=c("TRUE","FALSE")) ~ ., data=numerics)
+prob_knn <-predict(knn_fit,numerics)
+class_diag(prob_knn[,1],election_turnout$trumpw, positive=1)
+
+table(truth= factor(election_turnout$trumpw==1, levels=c("TRUE","FALSE")),
+      prediction= factor(prob_knn[,1]>.5, levels=c("TRUE","FALSE"))) %>% addmargins
 # non-parametric classifier code here
 ```
 
 ```{R}
-# cross-validation of np classifier here
+k=10 #choose number of folds
+data<-sample_frac(numerics) #randomly order rows
+folds <- rep(1:k, length.out=nrow(data)) #create folds
+diags<-NULL
+for(i in 1:k){
+  ## Create training and test sets
+  train<-data[folds!=i,] 
+  test<-data[folds==i,]
+  truth<-test$trumpw ## Truth labels for fold i
+  ## Train model on training set (all but fold i)
+  fit<-knn3(trumpw~.,data=train)
+  ## Test model on test set (fold i) 
+  probs<-predict(fit,newdata = test)[,2]
+  ## Get diagnostics for fold i
+  diags<-rbind(diags,class_diag(probs,truth, positive=1))
+}
+summarize_all(diags,mean)
 ```
 
-Discussion
+The kNN model does much better than logistic regression, but still gets a 'C' score. After CV though, the AUC drops to .54 and makes it a "bad" model. I see signs of overfitting because of the drastic change in AUC. This nonparametric model does worse with the cross-validation performance when compared to the logistic regression. 
 
 
 ### Regression/Numeric Prediction
 
 ```{R}
-# regression model code here
+fit<-lm(trumpshare~percoled + gdppercap ,data=election_turnout) 
+yhat<-predict(fit)
+mean((election_turnout$trumpshare-yhat)^2)
 ```
 
 ```{R}
-# cross-validation of regression model here
+k=5 #choose number of folds
+data<-election_turnout[sample(nrow(election_turnout)),] #randomly order rows
+folds<-cut(seq(1:nrow(election_turnout)),breaks=k,labels=F) #create folds
+diags<-NULL
+for(i in 1:k){
+  train<-data[folds!=i,]
+  test<-data[folds==i,]
+  ## Fit linear regression model to training set
+  fit<-lm(trumpshare~percoled + gdppercap,data=train)
+  ## Get predictions/y-hats on test set (fold i)
+  yhat<-predict(fit,newdata=test)
+  ## Compute prediction error  (MSE) for fold i
+  diags<-mean((test$trumpshare-yhat)^2) 
+}
+mean(diags)
 ```
 
-Discussion
+There are no signs of overfitting, in fact the model does better when it is cross-validated. However, overall both models perform exceptionally well with an almost near 0 MSE. The CV is only .003 better than the linear regression model fitted to the entire dataset. 
 
 ### Python 
 
 ```{R}
 library(reticulate)
+word1 <- "you"
+
+word2 <- "all"
+equal <- '='
 ```
 
 ```{python}
-# python code here
+word3 = "y'all"
+print(r.word1 + " "+  r.word2)
 ```
-
-Discussion
+```{R}
+cat(c(word1,word2, equal, py$word3))
+```
+I first declared some words in the R and python chunk, then I printed in the python code using the words from the R chunk and referring to them with r.varname. Then, at the last R chunk I combined code from the first R chunk and the python chunk (using py$varname) to make a phrase. 
 
 ### Concluding Remarks
 
