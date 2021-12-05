@@ -55,15 +55,9 @@ Paragraph or two introducing your datasets and variables, why they are interesti
 ```{R}
 library(tidyverse)
 
-install.packages("stevedata")
 library(stevedata)
-??election_turnout
+election_turnout
 
-# read your datasets in here, e.g., with read_csv()
-
-# if your dataset needs tidying, do so here
-
-# any other code here
 ```
 
 ### Cluster Analysis
@@ -92,7 +86,7 @@ pam1$silinfo$avg.width
 plot(pam1,which=2)
 election_turnout %>%slice(pam1$id.med)
 
-upper  = list(continuous = "blank")
+
 
 ```
 
@@ -115,8 +109,6 @@ ggplot() + geom_bar(aes(y=varprop, x=1:7), stat="identity") + xlab("") + geom_pa
   geom_text(aes(x=1:7, y=varprop, label=round(varprop, 2)), vjust=1, col="white", size=5) + 
   scale_y_continuous(breaks=seq(0, .6, .2), labels = scales::percent) + 
   scale_x_continuous(breaks=1:10)
-#pick pca3
-eigval
 
 library(factoextra)
 fviz_pca_biplot(pcac)
@@ -171,8 +163,6 @@ summarize_all(diags,mean)
 
 
 
-```
-```
 The logistic regression model has a low scoring AUC of .479, which is worse than a 50-50 chance of guessing. The accuracy is also very low.
 However, k-fold CV predicts almost 50% more effectively than the logistic regression. I do not see the typical signs of overfitting, in fact, it is just the opposite. The logistic regression model seems to be over fitting more than any of the CV tests. 
 
@@ -186,7 +176,7 @@ class_diag(prob_knn[,1],election_turnout$trumpw, positive=1)
 
 table(truth= factor(election_turnout$trumpw==1, levels=c("TRUE","FALSE")),
       prediction= factor(prob_knn[,1]>.5, levels=c("TRUE","FALSE"))) %>% addmargins
-# non-parametric classifier code here
+
 ```
 
 ```{R}
@@ -257,7 +247,7 @@ print(r.word1 + " "+  r.word2)
 ```{R}
 cat(c(word1,word2, equal, py$word3))
 ```
-I first declared some words in the R and python chunk, then I printed in the python code using the words from the R chunk and referring to them with r.varname. Then, at the last R chunk I combined code from the first R chunk and the python chunk (using py$varname) to make a phrase. 
+I first declared some words in the R and python chunk, then I printed in the python code using the words from the R chunk and referred to them with r.varname. Then, at the last R chunk I combined code from the first R chunk and the python chunk (using py$varname) to make a phrase. 
 
 ### Concluding Remarks
 
